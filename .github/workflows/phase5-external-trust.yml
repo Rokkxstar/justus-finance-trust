@@ -1,0 +1,158 @@
+name: Phase 5 external trust boundary
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_identity:
+        description: Canonical Phase-5 exit identity bound to the reviewed snapshot
+        required: true
+        type: string
+        default: phase-5-exit-20260828T000000Z-83f99826170b
+
+concurrency:
+  group: phase-5-external-trust
+  cancel-in-progress: false
+
+jobs:
+  verify-candidate:
+    name: Execute candidate in isolated verification job
+    runs-on: windows-latest
+    environment: phase-exit-trust
+    outputs:
+      release_sha256: ${{ steps.exit.outputs.release_sha256 }}
+      decision_sha256: ${{ steps.exit.outputs.decision_sha256 }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out protected trust implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Python runtime
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          cache: false
+
+      - name: Prove trust-boundary fail-closed behavior
+        shell: pwsh
+        run: python -m unittest -v trusted.test_trust_boundary
+
+      - name: Preserve canonical LF candidate bytes on Windows
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - name: Check out exact private candidate commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: Rokkxstar/JUSTUS
+          ref: 123c29f149cb25a4f270979708bdccf266c130e8
+          token: ${{ secrets.JUSTUS_READ_TOKEN }}
+          path: candidate
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install exact test dependencies
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check tzdata==2025.2 coverage==7.10.6 setuptools==80.9.0
+
+      - name: Install hash-verified PostgreSQL test runtime
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'postgresql-17.11.zip'
+          $target = Join-Path $env:RUNNER_TEMP 'trusted-postgresql'
+          Invoke-WebRequest -Uri 'https://get.enterprisedb.com/postgresql/postgresql-17.11-1-windows-x64-binaries.zip' -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = '6eabdf00d2893713b75db4336a23c3fdf505f056e217ec6e2e95d901750cfea3'
+          if ($actual -ne $expected) { throw "PostgreSQL runtime hash mismatch: $actual" }
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $target -Force
+          "PHASE2_POSTGRES_BIN=$target\pgsql\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install forged gh tripwire ahead of every PATH entry
+        shell: pwsh
+        run: |
+          $tripwireDir = Join-Path $env:RUNNER_TEMP 'forged-gh-tripwire'
+          $sentinel = Join-Path $env:RUNNER_TEMP 'forged-gh-was-called.txt'
+          New-Item -ItemType Directory -Path $tripwireDir -Force | Out-Null
+          @('@echo off', 'type nul > "%FORGED_GH_SENTINEL%"', 'exit /b 93') | Set-Content -LiteralPath (Join-Path $tripwireDir 'gh.cmd') -Encoding ascii
+          "FORGED_GH_SENTINEL=$sentinel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $tripwireDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Execute protected external Full Exit
+        id: exit
+        shell: pwsh
+        env:
+          FINANCE_PO_TRUST_LEDGER_SHA256: ${{ vars.FINANCE_PO_TRUST_LEDGER_SHA256 }}
+        run: >-
+          python -m trusted.phase5_exit
+          --candidate "$env:GITHUB_WORKSPACE\candidate"
+          --output-dir "$env:GITHUB_WORKSPACE\trusted-output"
+          --release-identity "${{ inputs.release_identity }}"
+          --github-output "$env:GITHUB_OUTPUT"
+
+      - name: Upload verification payload for fresh attestation job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase5-verification-payload
+          path: trusted-output/*
+          if-no-files-found: error
+          retention-days: 30
+
+  attest-release:
+    name: Reverify and attest on a fresh runner
+    needs: verify-candidate
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out protected trust implementation again
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up pinned Python runtime
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+          cache: false
+
+      - name: Download only the first job payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: phase5-verification-payload
+          path: attestation-input
+
+      - name: Independently verify artifact and decision
+        id: verify
+        shell: pwsh
+        run: >-
+          python -m trusted.verify_artifact
+          --artifact-dir "$env:GITHUB_WORKSPACE\attestation-input"
+          --expected-release-sha256 "${{ needs.verify-candidate.outputs.release_sha256 }}"
+          --expected-decision-sha256 "${{ needs.verify-candidate.outputs.decision_sha256 }}"
+          --github-output "$env:GITHUB_OUTPUT"
+
+      - name: Attest Phase-5 release archive
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
+        with:
+          subject-path: ${{ steps.verify.outputs.release_path }}
+
+      - name: Attest independent trust decision
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
+        with:
+          subject-path: ${{ steps.verify.outputs.decision_path }}
+
+      - name: Publish final attested candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase5-exit-attested-${{ steps.verify.outputs.release_sha256 }}
+          path: |
+            ${{ steps.verify.outputs.release_path }}
+            ${{ steps.verify.outputs.decision_path }}
+          if-no-files-found: error
+          retention-days: 90
