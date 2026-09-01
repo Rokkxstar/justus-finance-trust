@@ -33,7 +33,6 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-          cache: false
 
       - name: Prove trust-boundary fail-closed behavior
         shell: pwsh
@@ -119,7 +118,6 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
-          cache: false
 
       - name: Download only the first job payload
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
