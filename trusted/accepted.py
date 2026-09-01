@@ -5,7 +5,9 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -176,6 +178,46 @@ def _unittest_ids_from_zip(candidate_root: Path, phase: str, contract_path: str,
     )
 
 
+def _probe_postgresql_restricted_cwd(
+    *, cwd: Path, environment: dict[str, str], log_path: Path
+) -> None:
+    """Fail closed if PostgreSQL's restricted Windows child cannot use the exact contract CWD."""
+
+    if os.name != "nt":
+        return
+    if environment.get("PG_RESTRICT_EXEC"):
+        raise TrustError("PG_RESTRICT_EXEC bypass is forbidden")
+    postgres = Path(environment["PHASE2_POSTGRES_BIN"]) / "postgres.exe"
+    system_root = Path(os.environ["SystemRoot"])
+    icacls = system_root / "System32" / "icacls.exe"
+    acl = subprocess.run(
+        [str(icacls), str(cwd)],
+        cwd=system_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    probe = subprocess.run(
+        [str(postgres), "-V"],
+        cwd=cwd,
+        env=environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if probe.returncode != 0:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(
+            f"restrictedPostgresCwd={cwd}\nACL:\n{acl.stdout}\nPROBE:\n{probe.stdout}",
+            encoding="utf-8",
+        )
+        raise TrustError(
+            f"accepted PostgreSQL contract CWD rejects the restricted child; log={log_path}"
+        )
+
+
 def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     records = inventory(candidate_root)
     snapshot = candidate_snapshot(candidate_root)
@@ -212,14 +254,21 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
                     logical = ["python", relative]
                     expected_ids = None
                 log_path = log_root / f"phase-{phase}-{sequence:03d}-{contract['kind'].lower()}.log"
+                environment = candidate_environment(accepted_root) | {
+                    "PYTHONPATH": __import__("os").pathsep.join(
+                        (str(accepted_root / "src"), str(accepted_root), str(candidate_root))
+                    )
+                }
+                if contract["kind"] == "POSTGRESQL":
+                    _probe_postgresql_restricted_cwd(
+                        cwd=accepted_root,
+                        environment=environment,
+                        log_path=log_path,
+                    )
                 output = run_checked(
                     python_command(*logical[1:]),
                     cwd=accepted_root,
-                    environment=candidate_environment(accepted_root) | {
-                        "PYTHONPATH": __import__("os").pathsep.join(
-                            (str(accepted_root / "src"), str(accepted_root), str(candidate_root))
-                        )
-                    },
+                    environment=environment,
                     log_path=log_path,
                     label=f"accepted {contract['kind']} contract {contract['path']}",
                 )
@@ -257,3 +306,4 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     receipt_path = candidate_root / "governance" / "evidence" / "receipts" / "accepted-regression.json"
     write_json(receipt_path, receipt)
     return receipt
+
