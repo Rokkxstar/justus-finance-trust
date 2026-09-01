@@ -67,10 +67,14 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertNotIn("Join-Path $env:RUNNER_TEMP 'trusted-contract-work'", text)
         self.assertIn("System32\\icacls.exe", text)
         self.assertEqual(text.count('"*${userSid}:(OI)(CI)F"'), 2)
+        self.assertEqual(text.count('"*S-1-5-32-545:(OI)(CI)M"'), 1)
         self.assertIn('"TMPDIR=$contractTemp"', text)
         self.assertIn('"TEMP=$contractTemp"', text)
         self.assertIn('"TMP=$contractTemp"', text)
         self.assertNotIn("TEMP: ${{ runner.temp }}", text)
+        self.assertIn("Prove restricted PostgreSQL child can use contract workspace", text)
+        self.assertIn('$env:PHASE2_POSTGRES_BIN\\postgres.exe" -V', text)
+        self.assertNotIn("PG_RESTRICT_EXEC", text)
         self.assertIn("Emit fail-closed accepted-contract diagnostic", text)
         self.assertIn("Get-Content -LiteralPath $diagnostic -Raw", text)
 
@@ -149,4 +153,5 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
