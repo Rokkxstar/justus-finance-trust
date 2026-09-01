@@ -93,6 +93,13 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertIn("cwd=accepted_root", source)
         self.assertIn("PG_RESTRICT_EXEC bypass is forbidden", source)
         self.assertIn("restrictedPostgresCwd=", source)
+        self.assertIn("_grant_restricted_postgres_temp_access", source)
+        self.assertIn('"*S-1-5-32-545:(OI)(CI)M"', source)
+        execute_source = source[source.index("def execute") :]
+        self.assertLess(
+            execute_source.index("_grant_restricted_postgres_temp_access(temp_root)"),
+            execute_source.index("_safe_extract("),
+        )
 
     def test_module_boot_does_not_trigger_path_hijacked_gh(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -162,6 +169,7 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
