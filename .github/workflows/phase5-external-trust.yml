@@ -84,6 +84,11 @@ jobs:
         shell: pwsh
         env:
           FINANCE_PO_TRUST_LEDGER_SHA256: ${{ vars.FINANCE_PO_TRUST_LEDGER_SHA256 }}
+          # PostgreSQL drops Administrator-group privileges on Windows. Keep
+          # extracted immutable contracts on the runner's non-profile temp
+          # volume so their working directory remains accessible afterwards.
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: >-
           python -m trusted.phase5_exit
           --candidate "$env:GITHUB_WORKSPACE\candidate"
