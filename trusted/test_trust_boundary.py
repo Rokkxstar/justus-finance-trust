@@ -71,6 +71,8 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertIn('"TEMP=$contractTemp"', text)
         self.assertIn('"TMP=$contractTemp"', text)
         self.assertNotIn("TEMP: ${{ runner.temp }}", text)
+        self.assertIn("Emit fail-closed accepted-contract diagnostic", text)
+        self.assertIn("Get-Content -LiteralPath $diagnostic -Raw", text)
 
     def test_trusted_python_never_executes_a_gh_command(self) -> None:
         for path in sorted((ROOT / "trusted").glob("*.py")):
@@ -147,3 +149,4 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
