@@ -88,7 +88,8 @@ class TrustBoundaryTests(unittest.TestCase):
     def test_accepted_postgresql_contract_probes_exact_restricted_cwd(self) -> None:
         source = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
         self.assertIn("_probe_postgresql_restricted_cwd", source)
-        self.assertIn('[str(postgres), "-V"]', source)
+        self.assertIn("str(initdb)", source)
+        self.assertIn('"--no-sync"', source)
         self.assertIn("cwd=accepted_root", source)
         self.assertIn("PG_RESTRICT_EXEC bypass is forbidden", source)
         self.assertIn("restrictedPostgresCwd=", source)
@@ -161,6 +162,7 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
