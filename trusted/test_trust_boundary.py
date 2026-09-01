@@ -58,6 +58,15 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertIn("forged-gh-tripwire", text)
         self.assertIn("git config --global core.autocrlf false", text)
 
+    def test_workflow_prepares_acl_bound_postgres_contract_workspace(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Prepare ACL-bound PostgreSQL contract workspace", text)
+        self.assertIn("System32\\icacls.exe", text)
+        self.assertIn('"*${userSid}:(OI)(CI)F"', text)
+        self.assertIn('"TEMP=$contractTemp"', text)
+        self.assertIn('"TMP=$contractTemp"', text)
+        self.assertNotIn("TEMP: ${{ runner.temp }}", text)
+
     def test_trusted_python_never_executes_a_gh_command(self) -> None:
         for path in sorted((ROOT / "trusted").glob("*.py")):
             if path.name == Path(__file__).name:
