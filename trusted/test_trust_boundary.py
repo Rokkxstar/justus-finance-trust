@@ -18,6 +18,7 @@ from trusted.common import (
     CANDIDATE_COMMIT,
     CANDIDATE_SNAPSHOT,
     PRODUCT_OWNER_LEDGER_SHA256,
+    TRUSTED_RUNTIME_SUPPORT,
     TrustError,
     candidate_environment,
     governance_control_files,
@@ -144,6 +145,47 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_TOKEN", environment)
         self.assertNotIn("FINANCE_PO_TRUST_LEDGER_SHA256", environment)
         self.assertEqual(environment["FORGED_GH_SENTINEL"], "tripwire")
+        self.assertEqual(
+            Path(environment["PYTHONPATH"].split(os.pathsep)[0]),
+            TRUSTED_RUNTIME_SUPPORT,
+        )
+
+    def test_trusted_runtime_repairs_nested_windows_temp_acls_without_bypass(self) -> None:
+        source = (TRUSTED_RUNTIME_SUPPORT / "sitecustomize.py").read_text(encoding="utf-8")
+        self.assertIn("_original_mkdtemp", source)
+        self.assertIn("tempfile.mkdtemp = _restricted_postgres_compatible_mkdtemp", source)
+        self.assertIn('"*S-1-5-32-545:(OI)(CI)M"', source)
+        self.assertNotIn("PG_RESTRICT_EXEC", source)
+        accepted = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
+        self.assertIn('(environment["PYTHONPATH"], str(candidate_root))', accepted)
+        with patch.dict(
+            os.environ,
+            {
+                "PHASE2_POSTGRES_BIN": str(ROOT),
+                "SystemRoot": os.environ["SystemRoot"],
+                "TEMP": tempfile.gettempdir(),
+                "TMP": tempfile.gettempdir(),
+            },
+            clear=True,
+        ):
+            environment = candidate_environment(ROOT)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import shutil,tempfile; p=tempfile.mkdtemp(); "
+                "print(tempfile.mkdtemp.__name__); shutil.rmtree(p)",
+            ],
+            cwd=ROOT,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        expected = "_restricted_postgres_compatible_mkdtemp" if os.name == "nt" else "mkdtemp"
+        self.assertEqual(result.stdout.strip(), expected)
 
     def test_transport_reconstruction_is_exact_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as name:
