@@ -85,6 +85,14 @@ class TrustBoundaryTests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             self.assertNotRegex(source, r"(?s)(?:subprocess\.run|run_checked)\([^\)]*['\"]gh(?:\.exe)?['\"]")
 
+    def test_accepted_postgresql_contract_probes_exact_restricted_cwd(self) -> None:
+        source = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
+        self.assertIn("_probe_postgresql_restricted_cwd", source)
+        self.assertIn('[str(postgres), "-V"]', source)
+        self.assertIn("cwd=accepted_root", source)
+        self.assertIn("PG_RESTRICT_EXEC bypass is forbidden", source)
+        self.assertIn("restrictedPostgresCwd=", source)
+
     def test_module_boot_does_not_trigger_path_hijacked_gh(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             directory = Path(name)
@@ -153,5 +161,6 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
