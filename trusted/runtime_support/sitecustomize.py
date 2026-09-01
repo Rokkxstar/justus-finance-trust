@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import shutil
 import subprocess
@@ -117,9 +118,14 @@ if os.name == "nt":
             return self.returncode
 
     class _PostgresCompatiblePopen(_original_popen):
+        @staticmethod
+        def _requires_pg_ctl_restricted_launcher() -> bool:
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+
         def __new__(cls, arguments: object, *args: object, **kwargs: object) -> object:
             if (
                 os.environ.get("JUSTUS_TRUSTED_POSTGRES_PG_CTL") == "1"
+                and cls._requires_pg_ctl_restricted_launcher()
                 and not args
                 and isinstance(arguments, (list, tuple))
                 and arguments
