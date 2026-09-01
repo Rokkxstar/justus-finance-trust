@@ -91,6 +91,15 @@ jobs:
           --release-identity "${{ inputs.release_identity }}"
           --github-output "$env:GITHUB_OUTPUT"
 
+      - name: Preserve fail-closed diagnostics without affecting the decision
+        if: ${{ failure() && steps.exit.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase5-full-exit-failure-diagnostics-${{ github.run_attempt }}
+          path: candidate/governance/evidence/logs/accepted/*
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload verification payload for fresh attestation job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
