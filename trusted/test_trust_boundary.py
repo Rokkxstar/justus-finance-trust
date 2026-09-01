@@ -67,6 +67,7 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertNotIn("Join-Path $env:RUNNER_TEMP 'trusted-contract-work'", text)
         self.assertIn("System32\\icacls.exe", text)
         self.assertEqual(text.count('"*${userSid}:(OI)(CI)F"'), 2)
+        self.assertIn('"TMPDIR=$contractTemp"', text)
         self.assertIn('"TEMP=$contractTemp"', text)
         self.assertIn('"TMP=$contractTemp"', text)
         self.assertNotIn("TEMP: ${{ runner.temp }}", text)

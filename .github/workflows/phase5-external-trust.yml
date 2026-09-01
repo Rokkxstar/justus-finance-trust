@@ -82,6 +82,7 @@ jobs:
           $icacls = Join-Path $env:SystemRoot 'System32\icacls.exe'
           & $icacls $contractTemp /inheritance:r /grant:r "*${userSid}:(OI)(CI)F"
           if ($LASTEXITCODE -ne 0) { throw "Failed to secure PostgreSQL contract workspace" }
+          "TMPDIR=$contractTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TEMP=$contractTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TMP=$contractTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
