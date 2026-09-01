@@ -27,6 +27,7 @@ from trusted.common import (
     restore_git_transport_bytes,
     safe_archive_manifest,
 )
+from trusted.phase5_exit import _contract_environment
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,6 +193,7 @@ class TrustBoundaryTests(unittest.TestCase):
         source = (TRUSTED_RUNTIME_SUPPORT / "sitecustomize.py").read_text(encoding="utf-8")
         self.assertIn('executable.with_name("pg_ctl.exe")', source)
         self.assertIn("class _PostgresCompatiblePopen(_original_popen)", source)
+        self.assertIn("ctypes.windll.shell32.IsUserAnAdmin()", source)
         self.assertIn("subprocess.Popen = _PostgresCompatiblePopen", source)
         self.assertNotIn("PG_RESTRICT_EXEC", source)
         accepted = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
@@ -239,6 +241,12 @@ class TrustBoundaryTests(unittest.TestCase):
                 "-s",
             ],
         )
+        base = {"UNCHANGED": "yes", "JUSTUS_TRUSTED_POSTGRES_PG_CTL": "stale"}
+        postgres = _contract_environment(base, "scripts/phase5_postgres_tests.py")
+        ordinary = _contract_environment(base, "tests/test_budgeting.py")
+        self.assertEqual(postgres["JUSTUS_TRUSTED_POSTGRES_PG_CTL"], "1")
+        self.assertNotIn("JUSTUS_TRUSTED_POSTGRES_PG_CTL", ordinary)
+        self.assertEqual(base["JUSTUS_TRUSTED_POSTGRES_PG_CTL"], "stale")
 
     def test_transport_reconstruction_is_exact_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as name:
