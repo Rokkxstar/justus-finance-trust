@@ -191,7 +191,8 @@ class TrustBoundaryTests(unittest.TestCase):
     def test_postgresql_contract_uses_pg_ctl_restricted_server_launch(self) -> None:
         source = (TRUSTED_RUNTIME_SUPPORT / "sitecustomize.py").read_text(encoding="utf-8")
         self.assertIn('executable.with_name("pg_ctl.exe")', source)
-        self.assertIn("subprocess.Popen = _postgres_compatible_popen", source)
+        self.assertIn("class _PostgresCompatiblePopen(_original_popen)", source)
+        self.assertIn("subprocess.Popen = _PostgresCompatiblePopen", source)
         self.assertNotIn("PG_RESTRICT_EXEC", source)
         accepted = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
         self.assertIn('environment["JUSTUS_TRUSTED_POSTGRES_PG_CTL"] = "1"', accepted)
@@ -213,7 +214,7 @@ class TrustBoundaryTests(unittest.TestCase):
             [
                 sys.executable,
                 "-c",
-                "import json,sitecustomize; "
+                "import asyncio,json,sitecustomize; "
                 "print(json.dumps(sitecustomize._postgres_launch_plan("
                 "['C:/pg/bin/postgres.exe','-D','C:/data','-p','5433','-h','127.0.0.1'])[0]))",
             ],
