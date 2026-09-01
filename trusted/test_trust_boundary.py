@@ -79,7 +79,10 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertIn('$env:PHASE2_POSTGRES_BIN\\postgres.exe" -V', text)
         self.assertNotIn("PG_RESTRICT_EXEC", text)
         self.assertIn("Emit fail-closed accepted-contract diagnostic", text)
+        self.assertIn("Emit fail-closed Full-Exit runtime diagnostic", text)
         self.assertIn("Get-Content -LiteralPath $diagnostic -Raw", text)
+        self.assertIn("trusted-output\\fresh-extract-logs\\postgres-1.log", text)
+        self.assertIn("trusted-output/fresh-extract-logs/postgres-1.log", text)
 
     def test_trusted_python_never_executes_a_gh_command(self) -> None:
         for path in sorted((ROOT / "trusted").glob("*.py")):
@@ -272,6 +275,7 @@ class TrustBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
