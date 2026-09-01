@@ -132,12 +132,22 @@ jobs:
           if (-not (Test-Path -LiteralPath $diagnostic -PathType Leaf)) { throw "Expected fail-closed diagnostic is missing" }
           Get-Content -LiteralPath $diagnostic -Raw
 
+      - name: Emit fail-closed Full-Exit runtime diagnostic
+        if: ${{ failure() && steps.exit.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:GITHUB_WORKSPACE 'trusted-output\fresh-extract-logs\postgres-1.log'
+          if (-not (Test-Path -LiteralPath $diagnostic -PathType Leaf)) { throw "Expected Full-Exit runtime diagnostic is missing" }
+          Get-Content -LiteralPath $diagnostic -Raw
+
       - name: Preserve fail-closed diagnostics without affecting the decision
         if: ${{ failure() && steps.exit.outcome == 'failure' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: phase5-full-exit-failure-diagnostics-${{ github.run_attempt }}
-          path: candidate/governance/evidence/logs/accepted/*
+          path: |
+            candidate/governance/evidence/logs/accepted/*
+            trusted-output/fresh-extract-logs/postgres-1.log
           if-no-files-found: error
           retention-days: 30
 
@@ -204,5 +214,6 @@ jobs:
             ${{ steps.verify.outputs.decision_path }}
           if-no-files-found: error
           retention-days: 90
+
 
 
