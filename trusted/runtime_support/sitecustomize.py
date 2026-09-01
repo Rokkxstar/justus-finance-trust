@@ -116,15 +116,19 @@ if os.name == "nt":
                 raise subprocess.TimeoutExpired(self.args, timeout)
             return self.returncode
 
-    def _postgres_compatible_popen(arguments: object, *args: object, **kwargs: object) -> object:
-        if (
-            os.environ.get("JUSTUS_TRUSTED_POSTGRES_PG_CTL") == "1"
-            and not args
-            and isinstance(arguments, (list, tuple))
-            and arguments
-            and Path(os.fspath(arguments[0])).name.lower() == "postgres.exe"
-        ):
-            return _PgCtlManagedProcess(arguments, **kwargs)
-        return _original_popen(arguments, *args, **kwargs)
+    class _PostgresCompatiblePopen(_original_popen):
+        def __new__(cls, arguments: object, *args: object, **kwargs: object) -> object:
+            if (
+                os.environ.get("JUSTUS_TRUSTED_POSTGRES_PG_CTL") == "1"
+                and not args
+                and isinstance(arguments, (list, tuple))
+                and arguments
+                and Path(os.fspath(arguments[0])).name.lower() == "postgres.exe"
+            ):
+                return _PgCtlManagedProcess(arguments, **kwargs)
+            return super().__new__(cls)
 
-    subprocess.Popen = _postgres_compatible_popen
+        def __init__(self, arguments: object, *args: object, **kwargs: object) -> None:
+            super().__init__(arguments, *args, **kwargs)
+
+    subprocess.Popen = _PostgresCompatiblePopen
