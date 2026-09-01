@@ -108,6 +108,14 @@ jobs:
           --release-identity "${{ inputs.release_identity }}"
           --github-output "$env:GITHUB_OUTPUT"
 
+      - name: Emit fail-closed accepted-contract diagnostic
+        if: ${{ failure() && steps.exit.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:GITHUB_WORKSPACE 'candidate\governance\evidence\logs\accepted\phase-2-017-postgresql.log'
+          if (-not (Test-Path -LiteralPath $diagnostic -PathType Leaf)) { throw "Expected fail-closed diagnostic is missing" }
+          Get-Content -LiteralPath $diagnostic -Raw
+
       - name: Preserve fail-closed diagnostics without affecting the decision
         if: ${{ failure() && steps.exit.outcome == 'failure' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -180,3 +188,4 @@ jobs:
             ${{ steps.verify.outputs.decision_path }}
           if-no-files-found: error
           retention-days: 90
+
