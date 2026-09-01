@@ -87,6 +87,15 @@ MIN_BRANCH_COVERAGE = 95.38
 MIN_FUNCTION_COVERAGE = 100.0
 
 
+def _contract_environment(base: dict[str, str], relative: str) -> dict[str, str]:
+    environment = base.copy()
+    if Path(relative).name.endswith("postgres_tests.py"):
+        environment["JUSTUS_TRUSTED_POSTGRES_PG_CTL"] = "1"
+    else:
+        environment.pop("JUSTUS_TRUSTED_POSTGRES_PG_CTL", None)
+    return environment
+
+
 def _trusted_files(root: Path) -> tuple[Path, ...]:
     return tuple(sorted(path for path in (root / "trusted").rglob("*.py") if path.is_file()))
 
@@ -187,7 +196,8 @@ def run_current_quality(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     postgres_counts: dict[str, int] = {}
     for index, (relative, expected_count) in enumerate(POSTGRES_RUNNERS, 1):
         output = run_checked(
-            python_command(relative), cwd=candidate_root, environment=environment,
+            python_command(relative), cwd=candidate_root,
+            environment=_contract_environment(environment, relative),
             log_path=log_root / f"postgres-{index}.log", label=relative,
         )
         cases = parse_case_results("POSTGRESQL", relative, output)
@@ -221,7 +231,8 @@ def run_par(candidate_root: Path, log_root: Path, generated_at: str) -> dict[str
             test_ids = [f"SCRIPT:{relative}"]
         log_path = log_root / f"{plan['executionId'].lower()}.log"
         output = run_checked(
-            python_command(*logical[1:]), cwd=candidate_root, environment=environment,
+            python_command(*logical[1:]), cwd=candidate_root,
+            environment=_contract_environment(environment, relative),
             log_path=log_path, label=f"PAR {plan['executionId']}",
         )
         cases = parse_case_results(plan["kind"], relative, output, test_ids if plan["kind"] == "UNITTEST" else None)
