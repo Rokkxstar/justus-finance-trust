@@ -232,6 +232,32 @@ def _probe_postgresql_restricted_cwd(
         )
 
 
+def _grant_restricted_postgres_temp_access(root: Path) -> None:
+    """Restore the inherited Users ACE that Python's Windows 0o700 temp root removes."""
+
+    if os.name != "nt":
+        return
+    system_root = Path(os.environ["SystemRoot"])
+    icacls = system_root / "System32" / "icacls.exe"
+    result = subprocess.run(
+        [
+            str(icacls),
+            str(root),
+            "/grant:r",
+            "*S-1-5-32-545:(OI)(CI)M",
+        ],
+        cwd=system_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise TrustError(
+            f"could not grant the restricted PostgreSQL child access to {root}: {result.stdout}"
+        )
+
+
 def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     records = inventory(candidate_root)
     snapshot = candidate_snapshot(candidate_root)
@@ -244,6 +270,7 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
             continue
         with tempfile.TemporaryDirectory(prefix=f"trust-p{phase}-") as temp_name:
             temp_root = Path(temp_name)
+            _grant_restricted_postgres_temp_access(temp_root)
             _safe_extract(candidate_root / record["archivePath"], temp_root)
             accepted_root = temp_root / record["archiveRoot"]
             adapter = _overlay_candidate_paths(accepted_root, record, candidate_root)
@@ -320,5 +347,6 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     receipt_path = candidate_root / "governance" / "evidence" / "receipts" / "accepted-regression.json"
     write_json(receipt_path, receipt)
     return receipt
+
 
 
