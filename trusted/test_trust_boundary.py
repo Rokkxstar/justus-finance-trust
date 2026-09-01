@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -186,6 +187,57 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         expected = "_restricted_postgres_compatible_mkdtemp" if os.name == "nt" else "mkdtemp"
         self.assertEqual(result.stdout.strip(), expected)
+
+    def test_postgresql_contract_uses_pg_ctl_restricted_server_launch(self) -> None:
+        source = (TRUSTED_RUNTIME_SUPPORT / "sitecustomize.py").read_text(encoding="utf-8")
+        self.assertIn('executable.with_name("pg_ctl.exe")', source)
+        self.assertIn("subprocess.Popen = _postgres_compatible_popen", source)
+        self.assertNotIn("PG_RESTRICT_EXEC", source)
+        accepted = (ROOT / "trusted" / "accepted.py").read_text(encoding="utf-8")
+        self.assertIn('environment["JUSTUS_TRUSTED_POSTGRES_PG_CTL"] = "1"', accepted)
+        if os.name != "nt":
+            return
+        with patch.dict(
+            os.environ,
+            {
+                "PHASE2_POSTGRES_BIN": str(ROOT),
+                "SystemRoot": os.environ["SystemRoot"],
+                "TEMP": tempfile.gettempdir(),
+                "TMP": tempfile.gettempdir(),
+            },
+            clear=True,
+        ):
+            environment = candidate_environment(ROOT)
+        environment["JUSTUS_TRUSTED_POSTGRES_PG_CTL"] = "1"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json,sitecustomize; "
+                "print(json.dumps(sitecustomize._postgres_launch_plan("
+                "['C:/pg/bin/postgres.exe','-D','C:/data','-p','5433','-h','127.0.0.1'])[0]))",
+            ],
+            cwd=ROOT,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(
+            json.loads(result.stdout),
+            [
+                "C:\\pg\\bin\\pg_ctl.exe",
+                "start",
+                "-D",
+                "C:\\data",
+                "-o",
+                "-p 5433 -h 127.0.0.1",
+                "-w",
+                "-s",
+            ],
+        )
 
     def test_transport_reconstruction_is_exact_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as name:
