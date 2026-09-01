@@ -21,6 +21,7 @@ PRODUCT_OWNER_LEDGER_SHA256 = "84bd9d65e499c858e4e3c947805c3df9eb19c37bd55e06ebb
 PARENT_PHASE4_SHA256 = "005e4f04ac66bde18faab9a367e1a287a9b71ad984934e5f9e6b91eff6ebca32"
 PRE_RETROFIT_PHASE5_SHA256 = "71d29269dddd8694e1ab191328047a4f29fcf978b60231440a0c06b6ef702236"
 ARCHIVE_ROOT = "phase-5-release"
+TRUSTED_RUNTIME_SUPPORT = Path(__file__).resolve().parent / "runtime_support"
 
 ACCEPTED_BASELINES = {
     "0": "77b709e9d08c2efb5042f9cfaaa6229b53839898e7394866f1ab9e84d4aa093f",
@@ -244,7 +245,9 @@ def candidate_environment(root: Path) -> dict[str, str]:
             "JUSTUS_READ_TOKEN", "FINANCE_PO_TRUST_LEDGER_SHA256",
         }:
             environment.pop(key, None)
-    environment["PYTHONPATH"] = os.pathsep.join((str(root / "src"), str(root)))
+    environment["PYTHONPATH"] = os.pathsep.join(
+        (str(TRUSTED_RUNTIME_SUPPORT), str(root / "src"), str(root))
+    )
     if not environment.get("PHASE2_POSTGRES_BIN"):
         raise TrustError("trusted PostgreSQL runtime binding is missing")
     return environment

@@ -295,11 +295,10 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
                     logical = ["python", relative]
                     expected_ids = None
                 log_path = log_root / f"phase-{phase}-{sequence:03d}-{contract['kind'].lower()}.log"
-                environment = candidate_environment(accepted_root) | {
-                    "PYTHONPATH": __import__("os").pathsep.join(
-                        (str(accepted_root / "src"), str(accepted_root), str(candidate_root))
-                    )
-                }
+                environment = candidate_environment(accepted_root)
+                environment["PYTHONPATH"] = os.pathsep.join(
+                    (environment["PYTHONPATH"], str(candidate_root))
+                )
                 if contract["kind"] == "POSTGRESQL":
                     _probe_postgresql_restricted_cwd(
                         cwd=accepted_root,
