@@ -58,13 +58,15 @@ class TrustBoundaryTests(unittest.TestCase):
         self.assertIn("forged-gh-tripwire", text)
         self.assertIn("git config --global core.autocrlf false", text)
 
-    def test_workflow_prepares_acl_bound_postgres_contract_workspace(self) -> None:
+    def test_workflow_prepares_acl_bound_postgres_runtime_and_contract_workspace(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Prepare ACL-bound PostgreSQL contract workspace", text)
-        self.assertIn("Join-Path $env:SystemDrive 'justus-pg-contracts'", text)
+        self.assertIn('Join-Path $env:SystemDrive "justus-postgresql-$env:GITHUB_RUN_ID"', text)
+        self.assertIn('Join-Path $env:SystemDrive "justus-pg-contracts-$env:GITHUB_RUN_ID"', text)
+        self.assertNotIn("Join-Path $env:RUNNER_TEMP 'trusted-postgresql'", text)
         self.assertNotIn("Join-Path $env:RUNNER_TEMP 'trusted-contract-work'", text)
         self.assertIn("System32\\icacls.exe", text)
-        self.assertIn('"*${userSid}:(OI)(CI)F"', text)
+        self.assertEqual(text.count('"*${userSid}:(OI)(CI)F"'), 2)
         self.assertIn('"TEMP=$contractTemp"', text)
         self.assertIn('"TMP=$contractTemp"', text)
         self.assertNotIn("TEMP: ${{ runner.temp }}", text)
