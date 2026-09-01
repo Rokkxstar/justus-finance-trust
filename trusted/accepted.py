@@ -187,7 +187,9 @@ def _probe_postgresql_restricted_cwd(
         return
     if environment.get("PG_RESTRICT_EXEC"):
         raise TrustError("PG_RESTRICT_EXEC bypass is forbidden")
-    postgres = Path(environment["PHASE2_POSTGRES_BIN"]) / "postgres.exe"
+    initdb = Path(environment["PHASE2_POSTGRES_BIN"]) / "initdb.exe"
+    probe_data = Path(environment["TEMP"]) / "restricted-initdb-cwd-probe"
+    shutil.rmtree(probe_data, ignore_errors=True)
     system_root = Path(os.environ["SystemRoot"])
     icacls = system_root / "System32" / "icacls.exe"
     acl = subprocess.run(
@@ -198,15 +200,27 @@ def _probe_postgresql_restricted_cwd(
         stderr=subprocess.STDOUT,
         check=False,
     )
-    probe = subprocess.run(
-        [str(postgres), "-V"],
-        cwd=cwd,
-        env=environment,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+    try:
+        probe = subprocess.run(
+            [
+                str(initdb),
+                "-D",
+                str(probe_data),
+                "--username=postgres",
+                "--auth=trust",
+                "--encoding=UTF8",
+                "--no-locale",
+                "--no-sync",
+            ],
+            cwd=cwd,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    finally:
+        shutil.rmtree(probe_data, ignore_errors=True)
     if probe.returncode != 0:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(
@@ -306,4 +320,5 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
     receipt_path = candidate_root / "governance" / "evidence" / "receipts" / "accepted-regression.json"
     write_json(receipt_path, receipt)
     return receipt
+
 
