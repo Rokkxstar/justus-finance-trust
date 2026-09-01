@@ -300,6 +300,7 @@ def execute(candidate_root: Path, log_root: Path) -> dict[str, Any]:
                     (environment["PYTHONPATH"], str(candidate_root))
                 )
                 if contract["kind"] == "POSTGRESQL":
+                    environment["JUSTUS_TRUSTED_POSTGRES_PG_CTL"] = "1"
                     _probe_postgresql_restricted_cwd(
                         cwd=accepted_root,
                         environment=environment,
